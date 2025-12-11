@@ -9,11 +9,13 @@ REQUIRED_ENV_VARS = [
     "APISIX_ADMIN_API_KEY",
     "LANGSMITH_ADMIN_API_KEY",
     "LANGSMITH_ORG_ID",
+    "ATLASSIAN_API_KEY"
 ]
 
 LG_AUTO_KEY_SCRIPT = "lg/auto_key.py"
 ONEPASSWORD_AUTO_SCRIPT = "1password/auto_1password.py"
 APISIX_AUTO_SCRIPT = "apisix/auto_as_add.py"
+JIRA_AUTO_SCRIPT = "jira/auto_jira_comment.py"
 
 
 def run_command(command_list, check=True, capture_output=False, text=True):
@@ -75,7 +77,7 @@ def check_prerequisites():
 
 def parse_arguments():
     """
-    Parse email and branch_name arguments.
+    Parse admin's & receiver's email and branch_name arguments.
     """
     epilog_text = """
 Prerequisites:
@@ -91,22 +93,34 @@ Prerequisites:
         epilog=epilog_text
     )
     parser.add_argument(
-        "-e", "--email",
-        required=True,
-        help="User's email address."
-    )
-    parser.add_argument(
         "-b", "--branch_name",
         required=True,
         help="Project's branch name."
+    )
+    parser.add_argument(
+        "-e", "--email",
+        required=True,
+        help="Your(Admin) email address."
+    )
+    parser.add_argument(
+        "-r", "--receiver",
+        required=True,
+        help="The email address of the recipient who applied for the key"
+    )
+    parser.add_argument(
+        "-t", "--ticket",
+        required=True,
+        help="The ticket of jira e.g. ENG-827224"
     )
     return parser.parse_args()
 
 
 def main():
     args = parse_arguments()
-    email = args.email
     branch_name = args.branch_name
+    email = args.email
+    receiver = args.receiver
+    ticket = args.ticket
 
     # Perform all necessary checks
     check_prerequisites()
@@ -128,7 +142,7 @@ def main():
         sys.exit(1)
 
     print("\n--- Executing auto_1password.py to get sharing link ---")
-    cmd_1p = [sys.executable, ONEPASSWORD_AUTO_SCRIPT, branch_name, lg_key, email]
+    cmd_1p = [sys.executable, ONEPASSWORD_AUTO_SCRIPT, branch_name, lg_key, receiver]
     result_1p = run_command(cmd_1p, capture_output=True)
 
     # Get sharing link, assuming it is the last line of stdout
@@ -144,6 +158,18 @@ def main():
     cmd_apisix = [sys.executable, APISIX_AUTO_SCRIPT, branch_name]
     run_command(cmd_apisix)
     print("✅ apisix/auto_as_add.py executed successfully.")
+
+    jira_comment = f"""
+Please check the following link to keep your LANGGRAPH_KEY.
+{sharing_link}
+Use your branch name as NSAGENT_KEY (case sensitive).
+More details can be found in the confluence guide below
+https://netskope.atlassian.net/wiki/spaces/DataScience/pages/5894406155/NSAgent+API+Guide
+    """
+    print("\n--- Executing jira/auto_jira_comment.py ---")
+    cmd_apisix = [sys.executable, JIRA_AUTO_SCRIPT, "-t", ticket, "-e", email, "-c", jira_comment]
+    run_command(cmd_apisix)
+    print("✅ apisix/auto_jira_add.py executed successfully.")
 
     print("\n====================================")
     print("Script Execution Complete!")
